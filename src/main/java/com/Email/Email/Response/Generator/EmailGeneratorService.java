@@ -87,7 +87,7 @@ public class EmailGeneratorService<webClientBuilder> {
         prompt.append("Task: Generate a professional email response\n");
         prompt.append("Requirements:\n");
         prompt.append("1. Do not include a subject line\n");
-        prompt.append("2. Keep the response professional and concise\n");
+        prompt.append("2. Keep the response professional and elaborated\n");
 
         // Add tone specification if provided
         if (emailRequest.getTone() != null && !emailRequest.getTone().trim().isEmpty()) {
@@ -98,7 +98,7 @@ public class EmailGeneratorService<webClientBuilder> {
         prompt.append("-------------------\n");
         prompt.append(emailRequest.getEmail().trim());
         prompt.append("\n-------------------\n");
-        prompt.append("\nPlease generate an appropriate response to the above email.");
+        prompt.append("\nPlease generate an appropriate professional response to the above email.");
 
         return prompt.toString();
     }
