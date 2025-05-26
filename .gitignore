@@ -13,8 +13,12 @@ pom.xml.next
 release.properties
 dependency-reduced-pom.xml
 buildNumber.properties
-.mvn/
+
+# Ignore everything inside .mvn except wrapper folder and key files
+.mvn/*
+!.mvn/wrapper/
 !.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
 
 ### Gradle ###
 .gradle/
