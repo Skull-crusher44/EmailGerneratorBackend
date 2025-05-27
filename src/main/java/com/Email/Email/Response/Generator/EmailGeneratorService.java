@@ -1,16 +1,3 @@
-package com.Email.Email.Response.Generator;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
-
-import java.util.Map;
 
 /*
 * Method	                Description
@@ -20,15 +7,30 @@ import java.util.Map;
 .retrieve()	                Initiates the request
 .bodyToMono()	            Convert to a single object
 .bodyToFlux()	            Convert to a stream of objects*/
+package com.Email.Email.Response.Generator;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+
+import java.util.Map;
 
 @Service
-public class EmailGeneratorService<webClientBuilder> {
+public class EmailGeneratorService {
+
     @Value("${gemini.api.url}")
     private String geminiApiUrl;
-    
+
     @Value("${gemini.api.key}")
     private String geminiApiKey;
 
+    @Value("${openai.api.url}")
+    private String openaiApiUrl;
+
+    @Value("${openai.api.key}")
+    private String openaiApiKey;
 
     private final WebClient webClient;
 
@@ -36,35 +38,62 @@ public class EmailGeneratorService<webClientBuilder> {
         this.webClient = webClientBuilder.build();
     }
 
-    public String generateEmailService(EmailType emailRequest){
-        //Build prompt
-         String prompt = buildPrompt(emailRequest);
-         //Craft Response
-        Map<String,Object> requestbody = Map.of("contents", new Object []{
-                        Map.of("parts",new Object[]{
-                                        Map.of("text",prompt)
-                                }
-                        )
-                }
-        );
-        // do req and res
-        String response = webClient
-                .post()
-                .uri(geminiApiUrl+geminiApiKey)
-                .header("Content-Type","application/json")
-                .bodyValue(requestbody)
+    public String generateEmailService(EmailType emailRequest) {
+        String prompt = buildPrompt(emailRequest);
+        String model = emailRequest.getModel();
+
+        if ("openai".equalsIgnoreCase(model)) {
+            String response = generateWithOpenAI(prompt);
+            return response;
+        } else if ("gemini".equalsIgnoreCase(model)) {
+            return generateWithGemini(prompt);
+        } else {
+            return "Unsupported model: " + model;
+        }
+    }
+
+    private String generateWithGemini(String prompt) {
+        Map<String, Object> requestBody = Map.of("contents", new Object[]{
+                Map.of("parts", new Object[]{
+                        Map.of("text", prompt)
+                })
+        });
+
+        String response = webClient.post()
+                .uri(geminiApiUrl + geminiApiKey)
+                .header("Content-Type", "application/json")
+                .bodyValue(requestBody)
                 .retrieve()
                 .bodyToMono(String.class)
                 .block();
-        //return res
-        return extractResponseContent(response);
+
+        return extractGeminiResponse(response);
     }
 
-    private String extractResponseContent(String response) {
+    private String generateWithOpenAI(String prompt) {
+        Map<String, Object> requestBody = Map.of(
+                "model", "gpt-3.5-turbo",
+                "messages", new Object[]{
+                        Map.of("role", "system", "content", "Give response according to tone."),
+                        Map.of("role", "user", "content", prompt)
+                }
+        );
+
+        String response = webClient.post()
+                .uri(openaiApiUrl)
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + openaiApiKey)
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
+
+        return extractOpenAIResponse(response);
+    }
+
+    private String extractGeminiResponse(String response) {
         try {
-            // object mapper is used to parse json object it convert json object to java objects
             ObjectMapper mapper = new ObjectMapper();
-            // it converts json data to tree like structure using readTree
             JsonNode rootNode = mapper.readTree(response);
             return rootNode.path("candidates")
                     .get(0)
@@ -73,8 +102,22 @@ public class EmailGeneratorService<webClientBuilder> {
                     .get(0)
                     .path("text")
                     .asText();
-        }catch (Exception exception){
-            return "error processing request: " + exception.getMessage();
+        } catch (Exception e) {
+            return "Gemini parsing error: " + e.getMessage();
+        }
+    }
+
+    private String extractOpenAIResponse(String response) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode rootNode = mapper.readTree(response);
+            return rootNode.path("choices")
+                    .get(0)
+                    .path("message")
+                    .path("content")
+                    .asText();
+        } catch (Exception e) {
+            return "OpenAI parsing error: " + e.getMessage();
         }
     }
 
@@ -87,9 +130,8 @@ public class EmailGeneratorService<webClientBuilder> {
         prompt.append("Task: Generate a professional email response\n");
         prompt.append("Requirements:\n");
         prompt.append("1. Do not include a subject line\n");
-        prompt.append("2. Keep the response professional and elaborated\n");
+        prompt.append("2. Keep the response professional and concise\n");
 
-        // Add tone specification if provided
         if (emailRequest.getTone() != null && !emailRequest.getTone().trim().isEmpty()) {
             prompt.append("3. Use a ").append(emailRequest.getTone().trim()).append(" tone\n");
         }
@@ -98,7 +140,7 @@ public class EmailGeneratorService<webClientBuilder> {
         prompt.append("-------------------\n");
         prompt.append(emailRequest.getEmail().trim());
         prompt.append("\n-------------------\n");
-        prompt.append("\nPlease generate an appropriate professional response to the above email.");
+        prompt.append("\nPlease generate an appropriate response to the above email.");
 
         return prompt.toString();
     }
