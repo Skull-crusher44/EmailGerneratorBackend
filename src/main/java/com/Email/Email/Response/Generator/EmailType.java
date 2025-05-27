@@ -10,6 +10,7 @@ import lombok.Setter;
 public class EmailType {
     private String emailContent;    // The email content to process
     private String tone;     // The tone to use in the response
+    private String model;
 
     public String getEmail() {
         return emailContent;
@@ -26,4 +27,13 @@ public class EmailType {
     public void setTone(String tone) {
         this.tone = tone;
     }
+
+    public String getModel() {
+        return model;
+    }
+
+    public void setModel(String model) {
+        this.model = model;
+    }
 }
+
